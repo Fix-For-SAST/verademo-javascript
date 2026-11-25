@@ -30,7 +30,7 @@ async function showFeed(req, res){
         return res.redirect("login?target=feed");
     }
 
-    console.log("User is Logged In - continuing... UA=", req.headers['user-agent'], " U=", username);
+    console.log("User is Logged In - continuing... UA=", JSON.stringify(req.headers['user-agent']), " U=", JSON.stringify(username));
     
     try {
         console.log("Getting Database connection");
@@ -141,7 +141,7 @@ async function processFeed(req, res){
         console.log("User is not Logged In - redirecting...");
         return res.redirect("login?target=feed");
     }
-    console.log("User is Logged In - continuing... UA=" + req.headers["User-Agent"] + " U=" + username);
+    console.log("User is Logged In - continuing... UA=" + JSON.stringify(req.headers["User-Agent"]) + " U=" + JSON.stringify(username));
 
     let addBlabSql = "INSERT INTO blabs (blabber, content, timestamp) values (?, ?, ?);";
 
@@ -377,8 +377,8 @@ async function processBlabbers(req,res){
         return nextView = res.redirect("login?target=blabbers");
     }
 
-    console.log("blabberUsername = " + blabberUsername);
-    console.log("command = " + command);
+    console.log("blabberUsername = " + JSON.stringify(blabberUsername));
+    console.log("command = " + JSON.stringify(command));
 
     try {
         /* START EXAMPLE VULNERABILITY */
