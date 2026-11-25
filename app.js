@@ -2,6 +2,7 @@ var dotenv = require('dotenv');
 dotenv.config();
 var createError = require('http-errors');
 var express = require('express');
+var CryptoJS = require('crypto-js');
 
 var path = require('path');
 var axios = require('axios');
@@ -34,7 +35,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'resources')));
-app.use(session({secret: "secret", saveUninitialized: true, resave: true}));
+app.use(session({secret: "secret", saveUninitialized: true, resave: true, cookie: { secure: true }}));
 
 app.use('/', indexRouter);
 
@@ -55,7 +56,7 @@ app.use(function(err, req, res, next) {
 });
 
 app.listen(PORT, () => {
-  console.log(`listening for requests on port ${PORT}`)
+  console.log(`listening for requests on port ${CryptoJS.AES.encrypt(PORT, process.env.SECRET_PASSPHRASE).toString()}`)
 })
 
 const _zipObjectDeep = require('lodash/zipObjectDeep'),
