@@ -30,7 +30,7 @@ async function showFeed(req, res){
         return res.redirect("login?target=feed");
     }
 
-    console.log("User is Logged In - continuing... UA=", req.headers['user-agent'], " U=", username);
+    console.log("User is Logged In - continuing... UA=", JSON.stringify(req.headers['user-agent']), " U=", JSON.stringify(username));
     
     try {
         console.log("Getting Database connection");
@@ -141,7 +141,7 @@ async function processFeed(req, res){
         console.log("User is not Logged In - redirecting...");
         return res.redirect("login?target=feed");
     }
-    console.log("User is Logged In - continuing... UA=" + req.headers["User-Agent"] + " U=" + username);
+    console.log("User is Logged In - continuing... UA=" + JSON.stringify(req.headers["User-Agent"]) + " U=" + JSON.stringify(username));
 
     let addBlabSql = "INSERT INTO blabs (blabber, content, timestamp) values (?, ?, ?);";
 
@@ -290,8 +290,21 @@ async function showBlabbers(req,res){
     
     let sort = req.query.sort;
     
-    if (sort == null || sort == "") {
+    // Whitelist of allowed sort columns and orders to prevent SQL injection
+    const allowedSortOptions = {
+        "blab_name ASC": "blab_name ASC",
+        "blab_name DESC": "blab_name DESC",
+        "username ASC": "username ASC",
+        "username DESC": "username DESC",
+        "created_at ASC": "created_at ASC",
+        "created_at DESC": "created_at DESC"
+    };
+
+    // Validate sort parameter against whitelist
+    if (sort == null || sort == "" || !allowedSortOptions[sort]) {
         sort = "blab_name ASC";
+    } else {
+        sort = allowedSortOptions[sort];
     }
 
     let nextView = 'res.redirect("feed");';
@@ -364,8 +377,8 @@ async function processBlabbers(req,res){
         return nextView = res.redirect("login?target=blabbers");
     }
 
-    console.log("blabberUsername = " + blabberUsername);
-    console.log("command = " + command);
+    console.log("blabberUsername = " + JSON.stringify(blabberUsername));
+    console.log("command = " + JSON.stringify(command));
 
     try {
         /* START EXAMPLE VULNERABILITY */
