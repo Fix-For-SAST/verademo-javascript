@@ -290,8 +290,21 @@ async function showBlabbers(req,res){
     
     let sort = req.query.sort;
     
-    if (sort == null || sort == "") {
+    // Whitelist of allowed sort columns and orders to prevent SQL injection
+    const allowedSortOptions = {
+        "blab_name ASC": "blab_name ASC",
+        "blab_name DESC": "blab_name DESC",
+        "username ASC": "username ASC",
+        "username DESC": "username DESC",
+        "created_at ASC": "created_at ASC",
+        "created_at DESC": "created_at DESC"
+    };
+
+    // Validate sort parameter against whitelist
+    if (sort == null || sort == "" || !allowedSortOptions[sort]) {
         sort = "blab_name ASC";
+    } else {
+        sort = allowedSortOptions[sort];
     }
 
     let nextView = 'res.redirect("feed");';
