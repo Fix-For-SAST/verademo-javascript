@@ -6,6 +6,29 @@ const User = require('../utils/User.js');
 const readline = require('readline');
 const util = require('util');
 
+// Veracode-approved allowlist validation for CWE-601
+function validRedirect(redirectUrl) {
+    const validRedirectUrls = ['/reset', '/login', '/profile', '/home'];
+    const index = validRedirectUrls.indexOf(redirectUrl);
+    if (index === -1) {
+        throw new Error("Invalid redirect URL");
+    }
+    return validRedirectUrls[index];
+}
+
+// Veracode-approved HTML encoding for CWE-80
+function vcEncodeHtml(str) {
+    if (!str) return '';
+    let result = String(str);
+    result = result.split('&').join('&amp;');
+    result = result.split('<').join('&lt;');
+    result = result.split('>').join('&gt;');
+    result = result.split('"').join('&quot;');
+    result = result.split("'").join('&#x27;');
+    result = result.split('/').join('&#x2F;');
+    return result;
+}
+
 
 const users = [
         User.create("admin", "admin", "Mr. Administrator"),
@@ -63,11 +86,13 @@ async function reset (req,res) {
             }).catch(error => {
                 console.log(error.message);
             });
-            // CWE-601
+            // CWE-601 - Fixed with allowlist validation
             if (req.query.redirect) {
-                return res.redirect(req.query.redirect);
+                return res.redirect(validRedirect(req.query.redirect));
             }
-            return res.send(response.data);
+            // CWE-80 - Fixed with HTML encoding
+            const sanitizedData = vcEncodeHtml(response.data);
+            return res.send(sanitizedData);
         } catch (err) {
             console.error(err.message);
             return res.status(500).send('Error occured during HTTP request');
@@ -85,7 +110,7 @@ async function recreateDatabaseSchema() {
 
     let filepath = 'blab_schema.sql';
     let skipString = '--|\/\\*';
-    skipString = skipString.replaceAll("(?=[]\\[+&!(){}^\"~*?:\\\\])", "\\\\");
+    skipString = skipString.replaceAll('(?=[]\\[+&!(){}^"~*?:\\\\])', '\\\\');
     let regex = new RegExp("^(" + skipString + ").*?");
     
     const filestream = fs.createReadStream(filepath);
