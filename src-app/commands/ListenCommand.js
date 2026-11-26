@@ -9,20 +9,20 @@ class ListenCommand {
 
     async execute(blabberUsername) {
         let sqlQuery = "INSERT INTO listeners (blabber, listener, status) values (?, ?, 'Active');";
-		console.log(sqlQuery);
+		console.log(JSON.stringify(sqlQuery));
 		try {
 			await dbconnector.query(sqlQuery, [blabberUsername, this.username])
 
-			sqlQuery = "SELECT blab_name FROM users WHERE username = '" + blabberUsername + "'";
-			console.log(sqlQuery);
-			let result = await dbconnector.query(sqlQuery);
+			sqlQuery = "SELECT blab_name FROM users WHERE username = ?";
+			console.log(JSON.stringify(sqlQuery));
+			let result = await dbconnector.query(sqlQuery, [blabberUsername]);
 			if (result.length > 0 )        
             {
                 /* START EXAMPLE VULNERABILITY */
 			    let event = this.username + " started listening to " + blabberUsername + " (" + result[0].blab_name + ")";
-			    sqlQuery = "INSERT INTO users_history (blabber, event) VALUES (\"" + this.username + "\", \"" + event + "\")";
-			    console.log(sqlQuery);
-			    await dbconnector.query(sqlQuery);
+			    sqlQuery = "INSERT INTO users_history (blabber, event) VALUES (?, ?)";
+			    console.log(JSON.stringify(sqlQuery));
+			    await dbconnector.query(sqlQuery, [this.username, event]);
 			    /* END EXAMPLE VULNERABILITY */
             }
 

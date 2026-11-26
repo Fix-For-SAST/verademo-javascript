@@ -30,7 +30,7 @@ async function showFeed(req, res){
         return res.redirect("login?target=feed");
     }
 
-    console.log("User is Logged In - continuing... UA=", req.headers['user-agent'], " U=", username);
+    console.log("User is Logged In - continuing... UA=", JSON.stringify(req.headers['user-agent']), " U=", JSON.stringify(username));
     
     try {
         console.log("Getting Database connection");
@@ -141,7 +141,7 @@ async function processFeed(req, res){
         console.log("User is not Logged In - redirecting...");
         return res.redirect("login?target=feed");
     }
-    console.log("User is Logged In - continuing... UA=" + req.headers["User-Agent"] + " U=" + username);
+    console.log("User is Logged In - continuing... UA=" + JSON.stringify(req.headers["User-Agent"]) + " U=" + JSON.stringify(username));
 
     let addBlabSql = "INSERT INTO blabs (blabber, content, timestamp) values (?, ?, ?);";
 
@@ -178,7 +178,7 @@ async function showBlab(req,res)
         return res.redirect("login?target=feed");
     }
 
-    console.log("User is Logged In - continuing... UA=" + req.headers["User-Agent"] + " U=" + username);
+    console.log("User is Logged In - continuing... UA=" + JSON.stringify(req.headers["User-Agent"]) + " U=" + JSON.stringify(username));
 
     const blabDetailsSql = "SELECT blabs.content, users.blab_name "
             + "FROM blabs INNER JOIN users ON blabs.blabber = users.username " + "WHERE blabs.blabid = ?;";
@@ -307,16 +307,30 @@ async function showBlabbers(req,res){
     console.log("User is Logged In - continuing... UA=" + req.headers["User-Agent"] + " U=" + username);
 
     /* START EXAMPLE VULNERABILITY */
+    // Validate sort parameter to prevent SQL injection
+    const allowedSortColumns = [
+        "blab_name ASC", "blab_name DESC",
+        "username ASC", "username DESC",
+        "created_at ASC", "created_at DESC",
+        "listeners ASC", "listeners DESC",
+        "listening ASC", "listening DESC"
+    ];
+
+    let validatedSort = "blab_name ASC";
+    if (allowedSortColumns.includes(sort)) {
+        validatedSort = sort;
+    }
+
     const blabbersSql = "SELECT users.username," + " users.blab_name," + " users.created_at,"
             + " SUM(if(listeners.listener=?, 1, 0)) as listeners,"
             + " SUM(if(listeners.status='Active',1,0)) as listening"
             + " FROM users LEFT JOIN listeners ON users.username = listeners.blabber"
-            + " WHERE users.username NOT IN (\"admin\",\"admin-totp\",?)" + " GROUP BY users.username" + " ORDER BY " + sort + ";";
+            + " WHERE users.username NOT IN (\"admin\",\"admin-totp\",?)" + " GROUP BY users.username" + " ORDER BY " + validatedSort + ";";
 
     try {
         console.log("Getting Database connection");
         // Find the Blabbers
-        console.log(blabbersSql);
+        console.log(JSON.stringify(blabbersSql));
         let blabbersResults = await dbconnector.query(blabbersSql, [username, username])
         /* END EXAMPLE VULNERABILITY */
 
@@ -364,8 +378,8 @@ async function processBlabbers(req,res){
         return nextView = res.redirect("login?target=blabbers");
     }
 
-    console.log("blabberUsername = " + blabberUsername);
-    console.log("command = " + command);
+    console.log("blabberUsername = " + JSON.stringify(blabberUsername));
+    console.log("command = " + JSON.stringify(command));
 
     try {
         /* START EXAMPLE VULNERABILITY */
