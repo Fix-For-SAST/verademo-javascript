@@ -248,7 +248,7 @@ async function processBlab(req,res)
         return res.redirect("login?target=feed");
     }
 
-    console.log("User is Logged In - continuing... UA=" + req.headers["User-Agent"] + " U=" + username);
+    console.log("User is Logged In - continuing... UA=" + JSON.stringify(req.headers["User-Agent"]) + " U=" + JSON.stringify(username));
     let addCommentSql = "INSERT INTO comments (blabid, blabber, content, timestamp) values (?, ?, ?, ?);";
 
     try {
@@ -304,22 +304,24 @@ async function showBlabbers(req,res){
         return res.redirect("login?target=blabbers");
     }
 
-    console.log("User is Logged In - continuing... UA=" + req.headers["User-Agent"] + " U=" + username);
+    console.log("User is Logged In - continuing... UA=" + JSON.stringify(req.headers["User-Agent"]) + " U=" + JSON.stringify(username));
 
     /* START EXAMPLE VULNERABILITY */
     // Validate sort parameter to prevent SQL injection
-    const allowedSortColumns = [
-        "blab_name ASC", "blab_name DESC",
-        "username ASC", "username DESC",
-        "created_at ASC", "created_at DESC",
-        "listeners ASC", "listeners DESC",
-        "listening ASC", "listening DESC"
-    ];
+    const allowedSortColumns = {
+        "blab_name ASC": "blab_name ASC",
+        "blab_name DESC": "blab_name DESC",
+        "username ASC": "username ASC",
+        "username DESC": "username DESC",
+        "created_at ASC": "created_at ASC",
+        "created_at DESC": "created_at DESC",
+        "listeners ASC": "listeners ASC",
+        "listeners DESC": "listeners DESC",
+        "listening ASC": "listening ASC",
+        "listening DESC": "listening DESC"
+    };
 
-    let validatedSort = "blab_name ASC";
-    if (allowedSortColumns.includes(sort)) {
-        validatedSort = sort;
-    }
+    const validatedSort = allowedSortColumns[sort] || "blab_name ASC";
 
     const blabbersSql = "SELECT users.username," + " users.blab_name," + " users.created_at,"
             + " SUM(if(listeners.listener=?, 1, 0)) as listeners,"
@@ -371,7 +373,7 @@ async function processBlabbers(req,res){
         return res.redirect("login?target=blabbers");
     }
 
-    console.log("User is Logged In - continuing... UA=" + req.headers["User-Agent"] + " U=" + username);
+    console.log("User is Logged In - continuing... UA=" + JSON.stringify(req.headers["User-Agent"]) + " U=" + JSON.stringify(username));
 
     if (command == null) {
         console.log("Empty command provided...");

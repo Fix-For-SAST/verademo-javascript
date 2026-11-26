@@ -25,39 +25,41 @@ async function processTools(req, res) {
 }
 // Pings selected host based on user input, then outputs the results
 async function ping(host) {
+    // Allowlist validation for host parameter
+    const ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'example.com', 'google.com', '8.8.8.8'];
+    const hostIndex = ALLOWED_HOSTS.indexOf(host);
+
+    if (hostIndex === -1) {
+        return Promise.reject('Invalid host selection');
+    }
+
+    // Use the allowlist value, not the user input
+    const safeHost = ALLOWED_HOSTS[hostIndex];
+
     return new Promise((resolve, reject) => {
         let output = "";
-        console.log("Pinging " + JSON.stringify(host));
+        console.log("Pinging " + JSON.stringify(safeHost));
 
         let timer = setTimeout(() => {
             console.log("Ping timed out");
-            output = "ping: unknown host " + host;
+            output = "ping: unknown host " + safeHost;
             reject(output);
         }, 5000);
         try {
-            let pingProcess = spawn('ping', ['-c', '1', host]);
-            pingProcess.stdout.on('data', (data) => {
-                output += data.toString();
-            });
-
-            pingProcess.stderr.on('data', (data) => {
-                console.log("Error: " + data.toString());
+            execFile('ping', ['-c', '1', safeHost], (error, stdout, stderr) => {
                 clearTimeout(timer);
-                reject(data.toString());
-            });
-
-            pingProcess.on('exit', (code) => {
-                console.log("Exit code: " + code);
-                clearTimeout(timer);
-                if (code === 0) {
-                    resolve(output);
+                if (error) {
+                    console.log("Error: " + stderr);
+                    reject(stderr || `ping process exited with code ${error.code}`);
                 } else {
-                    reject(`ping process exited with code ${code}`);
+                    console.log("Exit code: 0");
+                    resolve(stdout);
                 }
             });
         } catch (err) {
             console.error("Error occured during ping: ", err);
-            output = "ping: unknown host " + host;
+            clearTimeout(timer);
+            output = "ping: unknown host " + safeHost;
             resolve(output);
         }
     });

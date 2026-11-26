@@ -91,7 +91,8 @@ async function reset (req,res) {
                 return res.redirect(validRedirect(req.query.redirect));
             }
             // CWE-80 - Fixed with HTML encoding
-            return res.send(vcEncodeHtml(response.data));
+            const sanitizedData = vcEncodeHtml(response.data);
+            return res.send(sanitizedData);
         } catch (err) {
             console.error(err.message);
             return res.status(500).send('Error occured during HTTP request');
