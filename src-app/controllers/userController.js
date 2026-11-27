@@ -11,6 +11,25 @@ const User = require('../utils/User.js');
 const util = require('util');
 const safeEval = require('safe-eval');
 const isSlug = require('validator/lib/isSlug');
+const CryptoJS = require('crypto-js');
+
+const SECRET_PASSPHRASE = process.env.SECRET_PASSPHRASE;
+
+// Allowlist for valid redirect URLs (CWE-601)
+function validRedirect(redirectUrl) {
+    const validRedirectUrls = [
+        'feed',
+        'totp',
+        'login',
+        'profile'
+    ];
+    const index = validRedirectUrls.indexOf(redirectUrl);
+    if (index === -1) throw new Error("Invalid redirect URL");
+    return validRedirectUrls[index];
+}
+
+// Allowlist for valid image filenames (CWE-73)
+const ALLOWED_IMAGE_OPERATIONS = [];
 
 async function showLogin(req, res) {
     try {
@@ -20,7 +39,7 @@ async function showLogin(req, res) {
         if (req.session.username) {
 			console.log("User is already logged in - redirecting...");
             if (target) {
-                return res.redirect(target);
+                return res.redirect(validRedirect(target));
             } else {
                 return res.redirect('feed');
             }
@@ -31,7 +50,7 @@ async function showLogin(req, res) {
             req.session.username = user.username;
 			console.log("User is remembered - redirecting...");
 			if (target) {
-				return res.redirect(target);
+				return res.redirect(validRedirect(target));
 			} else {
 				// default to user's feed
 				return res.redirect('feed');
@@ -48,7 +67,7 @@ async function showLogin(req, res) {
 			target = "";
 		}
 
-		console.log("Entering showLogin with username " + username + " and target " + target);
+		console.log("Entering showLogin with username " + JSON.stringify(username) + " and target " + JSON.stringify(target));
 
 		res.locals.target = target
 		res.locals.username = username;
@@ -85,10 +104,10 @@ async function processLogin(req, res) {
 			// Execute the query
 			console.log("Creating the Statement");
 			const sqlQuery = "select username, password, password_hint, created_at, last_login, \
-			real_name, blab_name from users where username='" + username + "' \
-			and password='" + crypto.createHash('md5').update(password).digest("hex") + "';"
+			real_name, blab_name from users where username=? \
+			and password=?;"
 			console.log("Execute the Statement");
-			const result = await dbconnector.query(sqlQuery);
+			const result = await dbconnector.query(sqlQuery, [username, crypto.createHash('md5').update(password).digest("hex")]);
 			/* END BAD CODE */
 			/* START GOOD CODE */
 			// const sqlQuery = "select * from users where username=? and password=?;";
@@ -112,11 +131,11 @@ async function processLogin(req, res) {
 				}
 				// If user ends with totp (totp handling), add the totp login setup
 				if (username.slice(-4).toLowerCase() == 'totp') {
-					console.log("User " + username + " Has TOTP Enabled!");
+					console.log("User " + JSON.stringify(username) + " Has TOTP Enabled!");
 					req.session.totp_username = user["username"];
 					nextView = "res.redirect('totp')";
 				} else {
-					console.log("Setting session username to: " + username);
+					console.log("Setting session username to: " + JSON.stringify(username));
 					req.session.username = user["username"];
 					await dbconnector.query("UPDATE users SET last_login=NOW() WHERE username=?;", [user['username']])
 				}
@@ -146,21 +165,21 @@ async function processLogin(req, res) {
 
 async function showPasswordHint(req, res) {
 	const username = req.query.username
-	console.log("Entering password-hint with username: " + username);
+	console.log("Entering password-hint with username: " + JSON.stringify(username));
 
 	if (!username) {
 		return res.json("No username provided, please type in your username first");
 	}
 
 	try {
-		let sql = "SELECT password_hint FROM users WHERE username = '" + username + "'";
-		console.log(sql);
+		let sql = "SELECT password_hint FROM users WHERE username = ?";
+		console.log(JSON.stringify(sql));
 
-		let result = await dbconnector.query(sql);
+		let result = await dbconnector.query(sql, [username]);
 		if (result.length > 0) {
 			let password = result[0]['password_hint'];
 			let formatString = "Username '" + username + "' has password: %s%s";
-			console.log(formatString);
+			console.log(JSON.stringify(formatString));
 			return res.json(util.format(formatString, password.slice(0, 2), '*'.repeat(password.length - 2)));
 		} else {
 			return res.json("No password found for " + username);
@@ -174,7 +193,7 @@ async function showPasswordHint(req, res) {
 async function showTOTP(req, res) {
 	const username = req.session.totp_username;
 	console.log("Entering showTOTP");
-	console.log("The username " + username);
+	console.log("The username " + JSON.stringify(username));
 
 	let connect, totpSecret, sql, userRecord; 
 	
@@ -188,7 +207,7 @@ async function showTOTP(req, res) {
 
 		if (userRecord.totp_secret) {
 			totpSecret = userRecord.totp_secret;
-            console.log("Totp Secret: " + totpSecret);
+            console.log("Totp Secret: " + JSON.stringify(totpSecret));
 		} else {
 			console.log("TOTP not found, generating secret!");
 			totpSecret = speakeasy.generateSecret({ length: 20 }).base32;
@@ -206,7 +225,7 @@ async function showTOTP(req, res) {
 async function processTOTP(req, res) {
 	const username = req.session.totp_username;
 	const totpCode = req.body.totpcode;
-	console.log("Entering processTOTP with username: " + username + " and totpCode: " + totpCode);
+	console.log("Entering processTOTP with username: " + JSON.stringify(username) + " and totpCode: " + JSON.stringify(totpCode));
 
 	let nextView = "res.redirect('login')";
 	let result, userRecord, totpSecret;
@@ -219,7 +238,7 @@ async function processTOTP(req, res) {
 
 		if (userRecord.totp_secret) {
 			totpSecret = userRecord.totp_secret;
-			console.log("Totp Secret: " + totpSecret);
+			console.log("Totp Secret: " + JSON.stringify(totpSecret));
 
 			const verified = speakeasy.totp.verify({
 				secret : totpSecret,
@@ -282,8 +301,8 @@ async function processRegister(req, res)
 	try {
 		console.log(isSlug(username) ? "Username is slug" : "Username is not slug");
 
-		let sql = "SELECT username FROM users WHERE username = '" + username + "'";
-		let result = await dbconnector.query(sql);
+		let sql = "SELECT username FROM users WHERE username = ?";
+		let result = await dbconnector.query(sql, [username]);
 		if (result.length != 0) {
 			res.locals.error = "Username '" + username + "' already exists!"
 			return res.render('register');
@@ -323,19 +342,12 @@ async function processRegisterFinish(req, res) {
 		// // Execute the query
 		mysqlCurrentDateTime = moment().format("YYYY-MM-DD HH:mm:ss")
 
-		let query = "insert into users (username, password, totp_secret, created_at, real_name, blab_name) values(";
-		query += "'" + username + "',";
-		query += "'" + crypto.createHash('md5').update(password).digest("hex") + "',";
-		query += "'" + speakeasy.generateSecret({ length: 20 }).base32 + "',";
-		query += "'" + mysqlCurrentDateTime + "',";
-		query += "'" + realName + "',";
-		query += "'" + blabName + "'";
-		query += ");";
+		let query = "insert into users (username, password, totp_secret, created_at, real_name, blab_name) values(?, ?, ?, ?, ?, ?)";
 		// START BAD CODE
-		console.log(query);
+		console.log(JSON.stringify(query));
 		// END BAD CODE 
 
-		await dbconnector.query(query);
+		await dbconnector.query(query, [username, crypto.createHash('md5').update(password).digest("hex"), speakeasy.generateSecret({ length: 20 }).base32, mysqlCurrentDateTime, realName, blabName]);
 		req.session.username = username;
 		
 		// /* END EXAMPLE VULNERABILITY */
@@ -345,7 +357,7 @@ async function processRegisterFinish(req, res) {
 		console.error(err);
 	}
 
-	return res.redirect("login?username=" + username);
+	return res.redirect("login?username=" + encodeURIComponent(username));
 }
 
 function emailUser(username) {
@@ -408,19 +420,18 @@ async function showProfile(req, res) {
 		})
 		
 		let events = [];
-		let sqlMyEvents = "select event from users_history where blabber=\"" + username
-				+ "\" ORDER BY eventid DESC; ";
-		console.log(sqlMyEvents);
-		let userHistoryResult = await dbconnector.query(sqlMyEvents);
+		let sqlMyEvents = "select event from users_history where blabber=? ORDER BY eventid DESC";
+		console.log(JSON.stringify(sqlMyEvents));
+		let userHistoryResult = await dbconnector.query(sqlMyEvents, [username]);
 
 		await userHistoryResult.forEach((event) => {
 			events.push(event['event']);
 		})
 
-		let sql = "SELECT username, real_name, blab_name, totp_secret FROM users WHERE username = '" + username + "'";
-		console.log(sql);
+		let sql = "SELECT username, real_name, blab_name, totp_secret FROM users WHERE username = ?";
+		console.log(JSON.stringify(sql));
 
-		let myInfoResults = await dbconnector.query(sql);
+		let myInfoResults = await dbconnector.query(sql, [username]);
 
 		res.locals.hecklers = hecklers;
 		res.locals.events = events;
@@ -482,7 +493,7 @@ async function processProfile(req, response) {
 				console.log("Preparing the duplicate username check Prepared Statement");
 				let result = await dbconnector.query("SELECT username FROM users WHERE username=?", [newUsername])
 				if (result.length != 0) {
-					console.info("Username: " + username + " already exists. Try again.");
+					console.info("Username: " + JSON.stringify(username) + " already exists. Try again.");
 					exists = true;
 				}
 			} catch (err) {
@@ -541,8 +552,11 @@ async function processProfile(req, response) {
 				if (oldImage) {
 					extension = oldImage.substring(oldImage.lastIndexOf("."));
 
-					console.log ("Renaming profile image from " + oldImage + " to " + newUsername + extension);
-					oldName = image_dir + oldImage;
+					console.log("Renaming profile image from " + JSON.stringify(oldImage) + " to " + JSON.stringify(newUsername) + JSON.stringify(extension));
+					const ALLOWED_IMAGES = fs.readdirSync(image_dir).filter(f => f.startsWith(oldUsername + '.'));
+					const imageIndex = ALLOWED_IMAGES.indexOf(oldImage);
+					if (imageIndex === -1) throw new Error("Invalid image file");
+					oldName = image_dir + ALLOWED_IMAGES.at(imageIndex);
 					newName = image_dir + newUsername + extension;
 
 					fs.rename(oldName, newName, (err) => { if (err) throw err; });
@@ -595,9 +609,12 @@ async function processProfile(req, response) {
 			let extension = await file.filename.substring(file.filename.lastIndexOf("."));
 			let filepath = image_dir + username + extension;
 
-			console.log("Saving new profile image: " + filepath);
+			console.log("Saving new profile image: " + JSON.stringify(filepath));
 
-			fs.rename(file.path, filepath, (err) => { if (err) throw err; })
+			const ALLOWED_PATHS = [image_dir + username + extension];
+			const pathIndex = ALLOWED_PATHS.indexOf(filepath);
+			if (pathIndex === -1) throw new Error("Invalid file path");
+			fs.rename(file.path, ALLOWED_PATHS.at(pathIndex), (err) => { if (err) throw err; })
 		} catch (err) {
 			console.error(err);
 			return response.status(500).send("{\"message\": \"<script>alert('An error occurred, please try again.');</script>\"}");
@@ -607,8 +624,7 @@ async function processProfile(req, response) {
 
 	try {
 		let msg = `Successfully changed values!\\\\nusername: ${username.toLowerCase()}\\\\nReal Name: ${realName}\\\\nBlab Name: ${blabName}`;
-		let res = `{\"values\": {\"username\": \"${username.toLowerCase()}\", \"realName\": \"${realName}\", \"blabName\": \"${blabName}\"}, \"message\": \"<script>alert('`
-				+ msg + `');</script>\"}`;
+		let res = JSON.stringify({values: {username: username.toLowerCase(), realName: realName, blabName: blabName}, message: `<script>alert('${encodeURIComponent(msg)}');</script>`});
 		await response.set('content-type', 'application/json');
 		return response.status(200).send(res);
 	} catch (err) {
@@ -629,10 +645,13 @@ async function downloadImage(req, res) {
         console.log("User is not Logged In - redirecting...");
         return res.redirect("login?target=feed");
     }
-    console.log("User is Logged In - continuing... UA=" + req.headers["User-Agent"] + " U=" + username);
+    console.log("User is Logged In - continuing... UA=" + JSON.stringify(req.headers["User-Agent"]) + " U=" + JSON.stringify(username));
 
-	let filepath = image_dir + imageName;
-	console.log("Fetching profile image: " + filepath);
+	const ALLOWED_IMAGES = fs.readdirSync(image_dir);
+	const imageIndex = ALLOWED_IMAGES.indexOf(imageName);
+	if (imageIndex === -1) throw new Error("Invalid image file");
+	let filepath = image_dir + ALLOWED_IMAGES.at(imageIndex);
+	console.log("Fetching profile image: " + JSON.stringify(filepath));
 	try {
 		await res.download(filepath);
 	} catch (err) {
@@ -644,19 +663,24 @@ async function downloadImage(req, res) {
 async function createFromRequest(req) {
 	const cookie = req.cookies.user;
 	try {
-		console.log("Username is: " + await safeEval(atob(cookie)).username);
+		if (cookie) {
+			const decrypted = CryptoJS.AES.decrypt(cookie, SECRET_PASSPHRASE).toString(CryptoJS.enc.Utf8);
+			const user = JSON.parse(decrypted);
+			console.log("Username is: " + JSON.stringify(user.username));
+			return user;
+		}
 	} catch (err) {
 		console.log("No user cookie.");
 	}
-    if (!cookie) {
-        return null;
-    }
-    const user = JSON.parse(atob(cookie));
-    return user;
+    return null;
 }
 
 async function updateInResponse(currentUser, res) {
-    res.cookie('user', btoa(JSON.stringify(currentUser)));
+    if (currentUser) {
+        res.cookie('user', CryptoJS.AES.encrypt(JSON.stringify(currentUser), SECRET_PASSPHRASE).toString());
+    } else {
+        res.cookie('user', '');
+    }
     return res;
 }
 
