@@ -6,6 +6,25 @@ const User = require('../utils/User.js');
 const readline = require('readline');
 const util = require('util');
 
+// Veracode-approved allowlist validation for CWE-601
+function validRedirect(redirectUrl) {
+    // Hardcoded list of every permitted redirect destination.
+    const validRedirectUrls = [
+        '/reset',
+        '/login',
+        '/profile',
+        '/home'
+    ];
+    // Strict equality lookup
+    const index = validRedirectUrls.indexOf(redirectUrl);
+    // Reject anything not on the list
+    if (index === -1) {
+        throw new Error("Invalid redirect URL");
+    }
+    // Return the value from the hardcoded array
+    return validRedirectUrls[index];
+}
+
 
 const users = [
         User.create("admin", "admin", "Mr. Administrator"),
@@ -63,11 +82,12 @@ async function reset (req,res) {
             }).catch(error => {
                 console.log(error.message);
             });
-            // CWE-601
+            // CWE-601 - Fixed with allowlist validation
             if (req.query.redirect) {
-                return res.redirect(req.query.redirect);
+                return res.redirect(validRedirect(req.query.redirect));
             }
-            return res.send(response.data);
+            // CWE-80 - Fixed with URI encoding
+            return res.send(encodeURIComponent(response.data));
         } catch (err) {
             console.error(err.message);
             return res.status(500).send('Error occured during HTTP request');

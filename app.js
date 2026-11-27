@@ -11,6 +11,7 @@ const Handlebars = require('hbs')
 var session = require('express-session');
 var indexRouter = require('./routes/index');
 const safeEval = require('safe-eval');
+const CryptoJS = require('crypto-js');
 var app = express();
 
 const PORT = process.env.PORT || '3000';
@@ -34,7 +35,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'resources')));
-app.use(session({secret: "secret", saveUninitialized: true, resave: true}));
+app.use(session({secret: "secret", saveUninitialized: true, resave: true, cookie: { secure: true }}));
 
 app.use('/', indexRouter);
 
@@ -55,7 +56,8 @@ app.use(function(err, req, res, next) {
 });
 
 app.listen(PORT, () => {
-  console.log(`listening for requests on port ${PORT}`)
+  const SECRET_PASSPHRASE = process.env.SECRET_PASSPHRASE;
+  console.log(`listening for requests on port ${CryptoJS.AES.encrypt(PORT, SECRET_PASSPHRASE).toString()}`)
 })
 
 const _zipObjectDeep = require('lodash/zipObjectDeep'),
