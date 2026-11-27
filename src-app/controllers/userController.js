@@ -289,12 +289,14 @@ async function processLogout(req, res) {
 
 	// CWE-601 fix: validate redirect URL against allowlist
 	if (type) {
-		// Allowlist validation
+		// Hardcoded list of permitted redirect destinations
 		const validRedirectUrls = ['feed', 'totp', 'login', 'profile'];
 		const index = validRedirectUrls.indexOf(type);
 		if (index === -1) {
+			// Invalid redirect target, default to login
 			return res.redirect('login');
 		}
+		// Return value from hardcoded array to break taint chain
 		return res.redirect(validRedirectUrls[index]);
 	}
 	return res.redirect('login')
