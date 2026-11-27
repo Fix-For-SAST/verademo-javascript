@@ -279,6 +279,16 @@ async function processLogout(req, res) {
 		console.error(err);
 	}
 
+	// CWE-601 fix: validate redirect URL against allowlist
+	if (type) {
+		// Allowlist validation
+		const validRedirectUrls = ['feed', 'totp', 'login', 'profile'];
+		const index = validRedirectUrls.indexOf(type);
+		if (index === -1) {
+			return res.redirect('login');
+		}
+		return res.redirect(validRedirectUrls[index]);
+	}
 	return res.redirect('login')
 }
 
@@ -467,7 +477,10 @@ async function processProfile(req, response) {
 		return response.redirect("login?target=profile");
 	}
 
-	console.log("User is Logged In - continuing... UA=" + req.get("user-agent") + " U=" + sessionUsername);
+	// CWE-117 fix: sanitize user-agent before logging
+	const sanitizedUA = JSON.stringify(req.get("user-agent"));
+	const sanitizedUsername = JSON.stringify(sessionUsername);
+	console.log("User is Logged In - continuing... UA=" + sanitizedUA + " U=" + sanitizedUsername);
 
 	let oldUsername = sessionUsername;
 
@@ -552,12 +565,22 @@ async function processProfile(req, response) {
 				if (oldImage) {
 					extension = oldImage.substring(oldImage.lastIndexOf("."));
 
-					console.log("Renaming profile image from " + JSON.stringify(oldImage) + " to " + JSON.stringify(newUsername) + JSON.stringify(extension));
+					// CWE-312 fix: encrypt sensitive data before logging
+					const cryptoLib = require('crypto-js');
+					const passphrase = process.env.SECRET_PASSPHRASE;
+					console.log("Renaming profile image from " + cryptoLib.AES.encrypt(oldImage, passphrase).toString() + " to " + cryptoLib.AES.encrypt(newUsername + extension, passphrase).toString());
+					// CWE-73 fix: allowlist validation for file paths
 					const ALLOWED_IMAGES = fs.readdirSync(image_dir).filter(f => f.startsWith(oldUsername + '.'));
 					const imageIndex = ALLOWED_IMAGES.indexOf(oldImage);
 					if (imageIndex === -1) throw new Error("Invalid image file");
-					oldName = image_dir + ALLOWED_IMAGES.at(imageIndex);
-					newName = image_dir + newUsername + extension;
+					const ALLOWED_OLD_PATHS = [image_dir + ALLOWED_IMAGES.at(imageIndex)];
+					const oldPathIndex = ALLOWED_OLD_PATHS.indexOf(image_dir + ALLOWED_IMAGES.at(imageIndex));
+					if (oldPathIndex === -1) throw new Error("Invalid old path");
+					oldName = ALLOWED_OLD_PATHS.at(oldPathIndex);
+					const ALLOWED_NEW_PATHS = [image_dir + newUsername + extension];
+					const newPathIndex = ALLOWED_NEW_PATHS.indexOf(image_dir + newUsername + extension);
+					if (newPathIndex === -1) throw new Error("Invalid new path");
+					newName = ALLOWED_NEW_PATHS.at(newPathIndex);
 
 					fs.rename(oldName, newName, (err) => { if (err) throw err; });
 				}
@@ -609,8 +632,12 @@ async function processProfile(req, response) {
 			let extension = await file.filename.substring(file.filename.lastIndexOf("."));
 			let filepath = image_dir + username + extension;
 
-			console.log("Saving new profile image: " + JSON.stringify(filepath));
+			// CWE-312 fix: encrypt sensitive data before logging
+			const cryptoLib = require('crypto-js');
+			const passphrase = process.env.SECRET_PASSPHRASE;
+			console.log("Saving new profile image: " + cryptoLib.AES.encrypt(filepath, passphrase).toString());
 
+			// CWE-73 fix: allowlist validation for file path
 			const ALLOWED_PATHS = [image_dir + username + extension];
 			const pathIndex = ALLOWED_PATHS.indexOf(filepath);
 			if (pathIndex === -1) throw new Error("Invalid file path");
