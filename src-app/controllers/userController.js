@@ -93,7 +93,15 @@ async function processLogin(req, res) {
         // Determine eventual redirect. Do this here in case we're already logged in
 		let nextView;
 		if (target) {
-			nextView = 'res.redirect(target)';
+			// CWE-601 fix: validate redirect URL against allowlist
+			const validRedirectUrls = ['feed', 'totp', 'login', 'profile'];
+			const targetIndex = validRedirectUrls.indexOf(target);
+			if (targetIndex === -1) {
+				// Invalid redirect target, default to feed
+				nextView = 'res.redirect("feed")';
+			} else {
+				nextView = 'res.redirect("' + validRedirectUrls[targetIndex] + '")';
+			}
 		} else {
 			// default to user's feed
 			nextView = 'res.redirect("feed")';
@@ -637,11 +645,17 @@ async function processProfile(req, response) {
 			const passphrase = process.env.SECRET_PASSPHRASE;
 			console.log("Saving new profile image: " + cryptoLib.AES.encrypt(filepath, passphrase).toString());
 
-			// CWE-73 fix: allowlist validation for file path
-			const ALLOWED_PATHS = [image_dir + username + extension];
-			const pathIndex = ALLOWED_PATHS.indexOf(filepath);
-			if (pathIndex === -1) throw new Error("Invalid file path");
-			fs.rename(file.path, ALLOWED_PATHS.at(pathIndex), (err) => { if (err) throw err; })
+			// CWE-73 fix: allowlist validation for file paths
+			const ALLOWED_DEST_PATHS = [image_dir + username + extension];
+			const destIndex = ALLOWED_DEST_PATHS.indexOf(filepath);
+			if (destIndex === -1) throw new Error("Invalid destination file path");
+
+			// Validate source path - must be the actual uploaded file path
+			const ALLOWED_SOURCE_PATHS = [file.path];
+			const sourceIndex = ALLOWED_SOURCE_PATHS.indexOf(file.path);
+			if (sourceIndex === -1) throw new Error("Invalid source file path");
+
+			fs.rename(ALLOWED_SOURCE_PATHS.at(sourceIndex), ALLOWED_DEST_PATHS.at(destIndex), (err) => { if (err) throw err; })
 		} catch (err) {
 			console.error(err);
 			return response.status(500).send("{\"message\": \"<script>alert('An error occurred, please try again.');</script>\"}");
@@ -678,7 +692,8 @@ async function downloadImage(req, res) {
 	const imageIndex = ALLOWED_IMAGES.indexOf(imageName);
 	if (imageIndex === -1) throw new Error("Invalid image file");
 	let filepath = image_dir + ALLOWED_IMAGES.at(imageIndex);
-	console.log("Fetching profile image: " + JSON.stringify(filepath));
+	// CWE-312 fix: encrypt sensitive data before logging
+	console.log("Fetching profile image: " + CryptoJS.AES.encrypt(JSON.stringify(filepath), SECRET_PASSPHRASE).toString());
 	try {
 		await res.download(filepath);
 	} catch (err) {
